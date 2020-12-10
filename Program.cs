@@ -12,13 +12,14 @@ namespace getpeerings
     {
         static int Main(string[] args)
         {
-            if (args.Length != 1)
+            if (args.Length != 1 && args.Length != 2)
             {
-                Console.WriteLine("Usage: getpeerings <path>");
+                Console.WriteLine("Usage: getpeerings <path> [project/network filter]");
                 return 1;
             }
 
             string path = args[0];
+            string filter = args.Length == 2 ? args[1] : string.Empty;
 
             string[] files = Directory.GetFiles(path, "*.json");
 
@@ -42,10 +43,8 @@ namespace getpeerings
                     {
                         foreach (JObject peering in peerings)
                         {
-                            peering["project"] = project.filename;
-                            peering["name"] = network["name"];
-                            peering["network"] = Path.GetFileName(peering["network"]?.Value<string>());
-                            peering["source_network"] = Path.GetFileName(peering["source_network"]?.Value<string>());
+                            peering["source"] = GetShortName(peering["source_network"]?.Value<string>() ?? string.Empty);
+                            peering["target"] = GetShortName(peering["network"]?.Value<string>() ?? string.Empty);
                             networkpeerings.Add(peering);
                         }
                     }
@@ -54,43 +53,66 @@ namespace getpeerings
 
             Console.WriteLine($"Got {networkpeerings.Count} network peerings.");
 
+            if (filter != string.Empty)
+            {
+                for (int i = 0; i < networkpeerings.Count;)
+                {
+                    if ((networkpeerings[i]["source"]?.Value<string>()?.Contains(filter) ?? true) ||
+                        (networkpeerings[i]["target"]?.Value<string>()?.Contains(filter) ?? true))
+                    {
+                        i++;
+                    }
+                    else
+                    {
+                        networkpeerings.RemoveAt(i);
+                    }
+                }
+
+                Console.WriteLine($"Filtered to {networkpeerings.Count} network peerings with: '{filter}'");
+            }
+
             var table = new string[networkpeerings.Count + 1, 10];
 
-            table[0, 0] = "project";
-            table[0, 1] = "source";
-            table[0, 2] = "target";
-            table[0, 3] = "autoCreateRoutes";
-            table[0, 4] = "exchangeSubnetRoutes";
-            table[0, 5] = "exportCustomRoutes";
-            table[0, 6] = "exportIp";
-            table[0, 7] = "importCustomRoutes";
-            table[0, 8] = "importIp";
-            table[0, 9] = "state";
-            //table[0, 10] = "stateDetails";
+            table[0, 0] = "source";
+            table[0, 1] = "target";
+            table[0, 2] = "autoCreateRoutes";
+            table[0, 3] = "exchangeSubnetRoutes";
+            table[0, 4] = "exportCustomRoutes";
+            table[0, 5] = "exportIp";
+            table[0, 6] = "importCustomRoutes";
+            table[0, 7] = "importIp";
+            table[0, 8] = "state";
+            table[0, 9] = "stateDetails";
             var sortedNetworkpeerings = networkpeerings
-                .OrderBy(p => p["project"])
-                .ThenBy(p => p["name"])
-                .ThenBy(p => p["network"])
+                .OrderBy(p => p["source"])
+                .ThenBy(p => p["target"])
                 .ToList();
             for (int i = 0; i < sortedNetworkpeerings.Count; i++)
             {
                 var networkpeering = sortedNetworkpeerings[i];
-                table[i + 1, 0] = networkpeering["project"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 1] = networkpeering["name"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 2] = networkpeering["network"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 3] = networkpeering["autoCreateRoutes"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 4] = networkpeering["exchangeSubnetRoutes"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 5] = networkpeering["exportCustomRoutes"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 6] = networkpeering["exportSubnetRoutesWithPublicIp"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 7] = networkpeering["importCustomRoutes"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 8] = networkpeering["importSubnetRoutesWithPublicIp"]?.Value<string>() ?? string.Empty;
-                table[i + 1, 9] = networkpeering["state"]?.Value<string>() ?? string.Empty;
-                //table[i + 1, 10] = networkpeering["stateDetails"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 0] = networkpeering["source"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 1] = networkpeering["target"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 2] = networkpeering["autoCreateRoutes"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 3] = networkpeering["exchangeSubnetRoutes"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 4] = networkpeering["exportCustomRoutes"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 5] = networkpeering["exportSubnetRoutesWithPublicIp"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 6] = networkpeering["importCustomRoutes"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 7] = networkpeering["importSubnetRoutesWithPublicIp"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 8] = networkpeering["state"]?.Value<string>() ?? string.Empty;
+                table[i + 1, 9] = networkpeering["stateDetails"]?.Value<string>() ?? string.Empty;
             }
 
             ShowTable(table);
 
             return 0;
+        }
+
+        static string GetShortName(string name)
+        {
+            string project = Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(Path.GetDirectoryName(name))) ?? string.Empty);
+            string network = Path.GetFileName(name) ?? string.Empty;
+
+            return $"{project}:{network}";
         }
 
         static void ShowTable(string[,] items)
